@@ -18,6 +18,8 @@ import 'screens/add_project_screen.dart';
 import 'screens/add_character_screen.dart';
 import 'screens/export_screen.dart';
 import 'screens/advanced_filter_screen.dart';
+import 'screens/location_screen.dart';
+import 'screens/schedule_screen.dart';
 
 class SceneFlowApp extends StatelessWidget {
   const SceneFlowApp({super.key});
@@ -40,6 +42,15 @@ class _AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
 
+    if (provider.isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.goldLight),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppHeader(
@@ -59,9 +70,9 @@ class _AppShell extends StatelessWidget {
       bottomNavigationBar: provider.showBackButton
           ? null
           : AppBottomNav(
-              activeTab: provider.currentTab,
-              onTabChange: provider.setCurrentTab,
-            ),
+        activeTab: provider.currentTab,
+        onTabChange: provider.setCurrentTab,
+      ),
     );
   }
 
@@ -93,6 +104,10 @@ class _AppShell extends StatelessWidget {
         return const DashboardScreen(key: ValueKey('dashboard'));
       case TabKey.team:
         return const CharactersScreen(key: ValueKey('team'));
+      case TabKey.locations:
+        return const LocationScreen(key: ValueKey('locations'));
+      case TabKey.planner:
+        return const ScheduleScreen(key: ValueKey('planner'));
     }
   }
 }

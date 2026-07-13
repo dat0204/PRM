@@ -23,6 +23,8 @@ class AppBottomNav extends StatelessWidget {
       (TabKey.schedule, Icons.movie_creation_outlined, Icons.movie_creation, 'Board'),
       (TabKey.board, Icons.dashboard_outlined, Icons.dashboard, 'Dashboard'),
       (TabKey.team, Icons.people_outline, Icons.people, 'Team'),
+      (TabKey.locations, Icons.place_outlined, Icons.place, 'Locations'),
+      (TabKey.planner, Icons.event_note_outlined, Icons.event_note, 'Planner'),
     ];
 
     return Container(
@@ -47,8 +49,10 @@ class AppBottomNav extends StatelessWidget {
         top: false,
         child: SizedBox(
           height: 72,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             children: tabs.map((tab) {
               final (key, iconOutline, iconFilled, label) = tab;
               final isActive = activeTab == key;

@@ -82,6 +82,45 @@ class Scene {
     required this.actionDialogueText,
   });
 
+  /// Note: characterIds is NOT included here — it's persisted separately
+  /// in the scene_characters junction table (many-to-many with Character).
+  Map<String, Object?> toMap() {
+    return {
+      'id': id,
+      'projectId': projectId,
+      'code': code,
+      'title': title,
+      'act': act,
+      'status': status.label,
+      'description': description,
+      'setting': setting.label,
+      'timeOfDay': timeOfDay.label,
+      'locationId': locationId,
+      'pages': pages,
+      'estimatedHours': estimatedHours,
+      'actionDialogueText': actionDialogueText,
+    };
+  }
+
+  factory Scene.fromMap(Map<String, Object?> map, {List<String> characterIds = const []}) {
+    return Scene(
+      id: map['id'] as String,
+      projectId: map['projectId'] as String? ?? '',
+      code: map['code'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      act: map['act'] as String? ?? '',
+      status: SceneStatusExtension.fromString(map['status'] as String? ?? 'Drafting'),
+      description: map['description'] as String? ?? '',
+      setting: SceneSettingExtension.fromString(map['setting'] as String? ?? 'INT'),
+      timeOfDay: SceneTimeOfDayExtension.fromString(map['timeOfDay'] as String? ?? 'DAY'),
+      locationId: map['locationId'] as String? ?? '',
+      characterIds: characterIds,
+      pages: map['pages'] as String? ?? '',
+      estimatedHours: (map['estimatedHours'] as num?)?.toDouble() ?? 0.0,
+      actionDialogueText: map['actionDialogueText'] as String? ?? '',
+    );
+  }
+
   Scene copyWith({
     String? id,
     String? projectId,

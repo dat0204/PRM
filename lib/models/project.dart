@@ -122,6 +122,47 @@ class Project {
     required this.acts,
   });
 
+  Map<String, Object?> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'startDate': startDate,
+      'director': director,
+      'type': type.label,
+      'genre': genre.label,
+      'status': status.label,
+      'progress': progress,
+      'thumbnailUrl': thumbnailUrl,
+      'codeName': codeName,
+      'acts': jsonEncodeActs(acts),
+    };
+  }
+
+  static String jsonEncodeActs(List<String> acts) => acts.join('|||');
+
+  static List<String> jsonDecodeActs(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    return raw.split('|||');
+  }
+
+  factory Project.fromMap(Map<String, Object?> map) {
+    return Project(
+      id: map['id'] as String,
+      title: map['title'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+      startDate: map['startDate'] as String? ?? '',
+      director: map['director'] as String? ?? '',
+      type: ProjectTypeExtension.fromString(map['type'] as String? ?? 'Feature'),
+      genre: ProjectGenreExtension.fromString(map['genre'] as String? ?? 'Drama'),
+      status: ProjectStatusExtension.fromString(map['status'] as String? ?? 'In Production'),
+      progress: map['progress'] as int? ?? 0,
+      thumbnailUrl: map['thumbnailUrl'] as String? ?? '',
+      codeName: map['codeName'] as String? ?? '',
+      acts: jsonDecodeActs(map['acts'] as String?),
+    );
+  }
+
   Project copyWith({
     String? id,
     String? title,

@@ -1,5 +1,5 @@
 // lib/providers/app_provider.dart
-// SceneFlow - Central state management using Provider
+// SceneFlow - Central state management using Provider + SQLite persistence
 
 import 'package:flutter/foundation.dart';
 import '../models/project.dart';
@@ -8,8 +8,9 @@ import '../models/location_item.dart';
 import '../models/scene.dart';
 import '../models/shooting_session.dart';
 import '../data/mock_data.dart';
+import '../data/app_database.dart';
 
-enum TabKey { projects, schedule, board, team }
+enum TabKey { projects, schedule, board, team, locations, planner }
 
 class SceneFilterState {
   final String? characterId;
@@ -44,12 +45,17 @@ class SceneFilterState {
 }
 
 class AppProvider extends ChangeNotifier {
-  // Data stores
-  List<Project> _projects = List.from(initialProjects);
-  List<Character> _characters = List.from(initialCharacters);
-  List<LocationItem> _locations = List.from(initialLocations);
-  List<Scene> _scenes = List.from(initialScenes);
-  List<ShootingSession> _schedule = List.from(initialSchedule);
+  final AppDatabase _db = AppDatabase.instance;
+
+  // Data stores (in-memory cache, mirrored to/from SQLite)
+  List<Project> _projects = [];
+  List<Character> _characters = [];
+  List<LocationItem> _locations = [];
+  List<Scene> _scenes = [];
+
+  // Loading state (true while the initial SQLite load/seed is happening)
+  bool _isLoading = true;
+  bool get isLoading => _isLoading;
 
   // Navigation state
   TabKey _currentTab = TabKey.projects;
@@ -65,12 +71,100 @@ class AppProvider extends ChangeNotifier {
   // Filter state
   SceneFilterState _activeFilters = const SceneFilterState();
 
+  AppProvider() {
+    _bootstrap();
+  }
+
+  // -- Bootstrap: load from SQLite, seeding with mock data on first run --
+  Future<void> _bootstrap() async {
+    final alreadySeeded = await _db.isSeeded;
+
+    if (!alreadySeeded) {
+      final sceneCharacterLinks = <String, List<String>>{
+        for (final s in initialScenes) s.id: s.characterIds,
+      };
+      await _db.seedIfEmpty(
+        projects: initialProjects.map((p) => p.toMap()).toList(),
+        characters: initialCharacters.map((c) => c.toMap()).toList(),
+        locations: initialLocations.map((l) => l.toMap()).toList(),
+        scenes: initialScenes.map((s) => s.toMap()).toList(),
+        sceneCharacterLinks: sceneCharacterLinks,
+      );
+    }
+
+    await _reloadAllFromDb();
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> _reloadAllFromDb() async {
+    final projectRows = await _db.getAllProjects();
+    final characterRows = await _db.getAllCharacters();
+    final locationRows = await _db.getAllLocations();
+    final sceneRows = await _db.getAllScenes();
+    final links = await _db.getAllSceneCharacterLinks();
+
+    _projects = projectRows.map((r) => Project.fromMap(r)).toList();
+    _characters = characterRows.map((r) => Character.fromMap(r)).toList();
+    _locations = locationRows.map((r) => LocationItem.fromMap(r)).toList();
+    _scenes = sceneRows
+        .map((r) => Scene.fromMap(r, characterIds: links[r['id'] as String] ?? const []))
+        .toList();
+  }
+
   // Getters
   List<Project> get projects => _projects;
   List<Character> get characters => _characters;
   List<LocationItem> get locations => _locations;
   List<Scene> get scenes => _scenes;
-  List<ShootingSession> get schedule => _schedule;
+
+  /// Production Planner (F4.1): scenes of the active project are grouped
+  /// automatically by their Location, producing a proposed shooting-day
+  /// schedule. This is computed on demand -- it is NOT a stored table --
+  /// so it always reflects the current state of Scenes/Locations.
+  List<ShootingSession> get schedule => productionScheduleFor(_selectedProjectId);
+
+  List<ShootingSession> productionScheduleFor(String projectId) {
+    final projectScenes = _scenes.where((s) => s.projectId == projectId).toList();
+    if (projectScenes.isEmpty) return [];
+
+    // Group scene ids by locationId, preserving stable order of first
+    // appearance so the result is deterministic.
+    final Map<String, List<Scene>> byLocation = {};
+    for (final scene in projectScenes) {
+      byLocation.putIfAbsent(scene.locationId, () => []).add(scene);
+    }
+
+    final sessions = <ShootingSession>[];
+    var dayNumber = 1;
+    for (final entry in byLocation.entries) {
+      final locId = entry.key;
+      final sceneGroup = entry.value;
+      final location = _locations.where((l) => l.id == locId).cast<LocationItem?>().firstOrNull;
+
+      final totalHours =
+      sceneGroup.fold<double>(0, (sum, s) => sum + s.estimatedHours);
+
+      final settingLabel = sceneGroup.first.setting.label;
+      final timeLabel = sceneGroup.first.timeOfDay.label;
+      final locationLabel = location?.name ?? sceneGroup.first.locationId;
+
+      sessions.add(ShootingSession(
+        id: 'auto-sess-$locId',
+        locationName: '${locationLabel.toUpperCase()} - DAY $dayNumber',
+        dayNumber: dayNumber,
+        settingHeader: '$settingLabel. $locationLabel - $timeLabel',
+        scenesCount: sceneGroup.length,
+        estimatedHours: totalHours,
+        sceneIds: sceneGroup.map((s) => s.id).toList(),
+      ));
+      dayNumber++;
+    }
+
+    // Largest shoots first so the crew tackles the biggest location first.
+    sessions.sort((a, b) => b.scenesCount.compareTo(a.scenesCount));
+    return sessions;
+  }
 
   TabKey get currentTab => _currentTab;
   String get selectedProjectId => _selectedProjectId;
@@ -147,40 +241,58 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Data mutations
+  // -- Data mutations (update in-memory state immediately, persist to
+  // SQLite in the background so callers keep the same synchronous API
+  // used across the rest of the app) --
+
   void saveProject(Project newProject) {
     _projects = [..._projects, newProject];
     _selectedProjectId = newProject.id;
     _isAddingProject = false;
     _currentTab = TabKey.projects;
     notifyListeners();
+    _db.upsertProject(newProject.toMap());
   }
 
   void saveCharacter(Character newCharacter) {
     _characters = [..._characters, newCharacter];
     _isAddingCharacter = false;
     notifyListeners();
+    _db.upsertCharacter(newCharacter.toMap());
   }
 
   void saveSceneDetails(String sceneId, Scene updatedScene) {
     _scenes = _scenes.map((s) => s.id == sceneId ? updatedScene : s).toList();
     _selectedSceneId = null;
     notifyListeners();
+    _db.upsertScene(updatedScene.toMap(), updatedScene.characterIds);
   }
 
   void addLocation(LocationItem newLocation) {
     _locations = [..._locations, newLocation];
     notifyListeners();
+    _db.upsertLocation(newLocation.toMap());
   }
 
   void updateLocation(String id, LocationItem updated) {
     _locations = _locations.map((l) => l.id == id ? updated : l).toList();
     notifyListeners();
+    _db.upsertLocation(updated.toMap());
+  }
+
+  /// Deletes a Location. Scenes still referencing this location fall back
+  /// to showing the raw id if it can no longer be resolved, so no Scene
+  /// data is silently lost.
+  void deleteLocation(String id) {
+    _locations = _locations.where((l) => l.id != id).toList();
+    notifyListeners();
+    _db.deleteLocation(id);
   }
 
   void addScene(Scene newScene) {
     _scenes = [..._scenes, newScene];
     notifyListeners();
+    _db.upsertScene(newScene.toMap(), newScene.characterIds);
   }
 
   void applyFilters(SceneFilterState filters) {
@@ -210,6 +322,10 @@ class AppProvider extends ChangeNotifier {
         return 'DASHBOARD';
       case TabKey.team:
         return 'CAST & DIRECTORY';
+      case TabKey.locations:
+        return 'LOCATIONS';
+      case TabKey.planner:
+        return 'PRODUCTION PLANNER';
     }
   }
 
@@ -227,4 +343,8 @@ class AppProvider extends ChangeNotifier {
       return true;
     }).toList();
   }
+}
+
+extension _FirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

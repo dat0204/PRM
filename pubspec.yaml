@@ -37,6 +37,15 @@ dependencies:
   provider: ^6.1.5+1
   google_fonts: ^8.1.0
 
+  # Local persistence
+  sqflite: ^2.4.1
+  path: ^1.9.0
+
+  # PDF export
+  pdf: ^3.11.3
+  printing: ^5.13.4
+  path_provider: ^2.1.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

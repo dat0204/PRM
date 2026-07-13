@@ -42,6 +42,32 @@ class LocationItem {
     this.imageUrl,
   });
 
+  Map<String, Object?> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'scenesCovered': scenesCovered,
+      'area': area,
+      'setting': setting.label,
+      'timeOfDay': timeOfDay.label,
+      'notes': notes,
+      'imageUrl': imageUrl,
+    };
+  }
+
+  factory LocationItem.fromMap(Map<String, Object?> map) {
+    return LocationItem(
+      id: map['id'] as String,
+      name: map['name'] as String? ?? '',
+      scenesCovered: map['scenesCovered'] as String? ?? '',
+      area: map['area'] as String? ?? '',
+      setting: LocationSettingExtension.fromString(map['setting'] as String? ?? 'INT'),
+      timeOfDay: LocationTimeOfDayExtension.fromString(map['timeOfDay'] as String? ?? 'DAY'),
+      notes: map['notes'] as String? ?? '',
+      imageUrl: map['imageUrl'] as String?,
+    );
+  }
+
   LocationItem copyWith({
     String? id,
     String? name,

@@ -46,6 +46,29 @@ class Character {
     required this.psychologicalProfile,
   });
 
+  Map<String, Object?> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'role': role.label,
+      'roleTitle': roleTitle,
+      'avatarUrl': avatarUrl,
+      'psychologicalProfile': psychologicalProfile,
+    };
+  }
+
+  factory Character.fromMap(Map<String, Object?> map) {
+    return Character(
+      id: map['id'] as String,
+      name: map['name'] as String? ?? '',
+      role: CharacterRoleExtension.fromString(
+          (map['role'] as String? ?? 'extra').toLowerCase()),
+      roleTitle: map['roleTitle'] as String? ?? '',
+      avatarUrl: map['avatarUrl'] as String? ?? '',
+      psychologicalProfile: map['psychologicalProfile'] as String? ?? '',
+    );
+  }
+
   Character copyWith({
     String? id,
     String? name,

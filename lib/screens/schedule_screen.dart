@@ -27,7 +27,17 @@ class ScheduleScreen extends StatelessWidget {
             children: [
               // Header
               Text(
-                'SHOOTING SCHEDULE',
+                'PRODUCTION PLANNER',
+                style: GoogleFonts.inter(
+                  color: AppColors.goldLight,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Shooting Schedule',
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontSize: 22,
@@ -36,10 +46,30 @@ class ScheduleScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Manage and organize your production timeline.',
+                'Các cảnh cùng địa điểm được tự động gom nhóm thành từng ngày quay đề xuất.',
                 style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
               ),
               const SizedBox(height: 24),
+
+              if (schedule.isEmpty)
+                GlassCard(
+                  padding: const EdgeInsets.all(40),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        const Icon(Icons.event_note_outlined,
+                            color: AppColors.textMuted, size: 32),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Chưa có phân cảnh nào để lập lịch.\nHãy thêm phân cảnh ở Story Board trước.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                              color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
               // Schedule sessions
               ...schedule.map((session) {
@@ -186,7 +216,7 @@ class ScheduleScreen extends StatelessWidget {
                                           errorBuilder: (_, __, ___) => const CircleAvatar(
                                             backgroundColor: AppColors.surfaceAlt,
                                             child:
-                                                Icon(Icons.person, size: 12, color: AppColors.textMuted),
+                                            Icon(Icons.person, size: 12, color: AppColors.textMuted),
                                           ),
                                         ),
                                       ),
@@ -219,18 +249,36 @@ class ScheduleScreen extends StatelessWidget {
           ),
         ),
 
-        // FAB
+        // Info FAB — explains the auto-grouping logic (no manual "add
+        // session" here since the schedule is always computed live from
+        // Scenes + Locations, per F4.1).
         Positioned(
           bottom: 100,
           right: 20,
           child: GestureDetector(
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Add session feature coming soon!',
-                      style: GoogleFonts.inter(color: Colors.white)),
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
                   backgroundColor: AppColors.surface,
-                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: Text('Auto-Scheduling',
+                      style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
+                  content: Text(
+                    'Lịch quay được tự động tạo bằng cách gom nhóm tất cả các '
+                        'phân cảnh có cùng Bối cảnh (Location) lại thành một ngày '
+                        'quay đề xuất. Thêm/sửa phân cảnh ở Story Board hoặc thêm '
+                        'bối cảnh mới ở tab Locations để cập nhật lịch này.',
+                    style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('OK',
+                          style: GoogleFonts.inter(
+                              color: AppColors.goldLight, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
                 ),
               );
             },
@@ -247,7 +295,7 @@ class ScheduleScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const Icon(Icons.add, color: Color(0xFF402D00), size: 24),
+              child: const Icon(Icons.info_outline, color: Color(0xFF402D00), size: 24),
             ),
           ),
         ),
