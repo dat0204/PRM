@@ -157,6 +157,14 @@ class AppDatabase {
     await db.insert('projects', row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// F1.1: Xóa dự án. Nhờ `ON DELETE CASCADE` trên scenes.projectId và
+  /// `PRAGMA foreign_keys = ON` ở trên, toàn bộ Scene thuộc dự án này sẽ
+  /// tự động bị xóa theo ngay trong SQLite, không cần xóa tay từng bảng.
+  Future<void> deleteProject(String id) async {
+    final db = await database;
+    await db.delete('projects', where: 'id = ?', whereArgs: [id]);
+  }
+
   // ── Characters ───────────────────────────────────────────────────────
 
   Future<List<Map<String, Object?>>> getAllCharacters() async {
