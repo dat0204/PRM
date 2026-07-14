@@ -40,11 +40,17 @@ dependencies:
   # Local persistence
   sqflite: ^2.4.1
   path: ^1.9.0
+  # Cho phép sqflite chạy trên Windows/Linux desktop (sqflite gốc chỉ hỗ
+  # trợ Android/iOS). Không cần khai báo riêng cho Android/iOS/web.
+  sqflite_common_ffi: ^2.3.4+4
 
   # PDF export
   pdf: ^3.11.3
   printing: ^5.13.4
   path_provider: ^2.1.5
+
+  # Charts (Module 5: Dashboard analytics — F5.1)
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:

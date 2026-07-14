@@ -1,5 +1,9 @@
 // lib/screens/add_project_screen.dart
-// SceneFlow - Add New Project Screen
+// SceneFlow - Add / Edit Project Screen (F1.1, F1.2)
+//
+// Form thêm hoặc chỉnh sửa một dự án phim: thông tin cơ bản, phân loại
+// (Type/Genre/Status/Progress) và cấu trúc các Hồi (Act) của kịch bản.
+// Dùng Form + TextFormField validate theo đúng nguyên tắc UX ở mục 5.2.
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,227 +21,435 @@ class AddProjectScreen extends StatefulWidget {
 }
 
 class _AddProjectScreenState extends State<AddProjectScreen> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _directorController = TextEditingController();
-  final _startDateController = TextEditingController();
-  final _thumbnailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _directorCtrl;
+  late final TextEditingController _thumbnailCtrl;
+  late final TextEditingController _codeNameCtrl;
+  late DateTime _startDate;
 
   ProjectType _type = ProjectType.feature;
   ProjectGenre _genre = ProjectGenre.drama;
+  ProjectStatus _status = ProjectStatus.preProduction;
+  int _progress = 0;
+  late List<String> _acts;
+
+  Project? _existing;
+  bool get _isEditing => _existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Đọc 1 lần khi khởi tạo form: nếu provider.editingProject != null
+    // nghĩa là người dùng bấm "Edit" từ ProjectsListScreen.
+    final existing = context.read<AppProvider>().editingProject;
+    _existing = existing;
+
+    _titleCtrl = TextEditingController(text: existing?.title ?? '');
+    _descCtrl = TextEditingController(text: existing?.description ?? '');
+    _directorCtrl = TextEditingController(text: existing?.director ?? '');
+    _thumbnailCtrl = TextEditingController(text: existing?.thumbnailUrl ?? '');
+    _codeNameCtrl = TextEditingController(text: existing?.codeName ?? '');
+    _startDate = existing != null
+        ? (DateTime.tryParse(existing.startDate) ?? DateTime.now())
+        : DateTime.now();
+    _type = existing?.type ?? ProjectType.feature;
+    _genre = existing?.genre ?? ProjectGenre.drama;
+    _status = existing?.status ?? ProjectStatus.preProduction;
+    _progress = existing?.progress ?? 0;
+    _acts = List<String>.from(existing?.acts ??
+        const ['Act 1: The Setup', 'Act 2: The Confrontation', 'Act 3: The Resolution']);
+  }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _directorController.dispose();
-    _startDateController.dispose();
-    _thumbnailController.dispose();
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    _directorCtrl.dispose();
+    _thumbnailCtrl.dispose();
+    _codeNameCtrl.dispose();
     super.dispose();
   }
 
-  void _handleSave() {
-    if (_titleController.text.isEmpty || _directorController.text.isEmpty) {
+  String get _formattedDate =>
+      '${_startDate.year.toString().padLeft(4, '0')}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.goldLight,
+            surface: AppColors.surface,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _startDate = picked);
+  }
+
+  void _addActField() {
+    setState(() => _acts.add('Act ${_acts.length + 1}: '));
+  }
+
+  void _removeAct(int index) {
+    setState(() => _acts.removeAt(index));
+  }
+
+  void _submit(AppProvider provider) {
+    if (!_formKey.currentState!.validate()) return;
+
+    final cleanActs = _acts.map((a) => a.trim()).where((a) => a.isNotEmpty).toList();
+    if (cleanActs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Title and Director are required.',
+          content: Text('Dự án cần có ít nhất một Hồi (Act)',
               style: GoogleFonts.inter(color: Colors.white)),
-          backgroundColor: Colors.redAccent,
+          backgroundColor: Colors.redAccent.shade700,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       return;
     }
 
-    final codeNum = DateTime.now().millisecondsSinceEpoch % 1000;
-    final newProject = Project(
-      id: 'proj-${DateTime.now().millisecondsSinceEpoch}',
-      title: _titleController.text,
-      description: _descriptionController.text,
-      startDate: _startDateController.text.isEmpty
-          ? DateTime.now().toIso8601String().substring(0, 10)
-          : _startDateController.text,
-      director: _directorController.text,
-      type: _type,
-      genre: _genre,
-      status: ProjectStatus.preProduction,
-      progress: 0,
-      thumbnailUrl: _thumbnailController.text,
-      codeName: 'SCN-$codeNum',
-      acts: ['Act 1: The Setup', 'Act 2: The Confrontation', 'Act 3: The Resolution'],
-    );
+    final thumbnail = _thumbnailCtrl.text.trim().isEmpty
+        ? 'https://placehold.co/400x600/1a1a1a/d4af37?text=${Uri.encodeComponent(_titleCtrl.text.trim())}'
+        : _thumbnailCtrl.text.trim();
 
-    context.read<AppProvider>().saveProject(newProject);
+    if (_isEditing) {
+      final updated = _existing!.copyWith(
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        startDate: _formattedDate,
+        director: _directorCtrl.text.trim(),
+        type: _type,
+        genre: _genre,
+        status: _status,
+        progress: _progress,
+        thumbnailUrl: thumbnail,
+        codeName: _codeNameCtrl.text.trim(),
+        acts: cleanActs,
+      );
+      provider.updateProject(_existing!.id, updated);
+    } else {
+      final newProject = Project(
+        id: 'proj-${DateTime.now().millisecondsSinceEpoch}',
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        startDate: _formattedDate,
+        director: _directorCtrl.text.trim(),
+        type: _type,
+        genre: _genre,
+        status: _status,
+        progress: _progress,
+        thumbnailUrl: thumbnail,
+        codeName: _codeNameCtrl.text.trim(),
+        acts: cleanActs,
+      );
+      provider.saveProject(newProject);
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isEditing ? 'Đã cập nhật dự án' : 'Đã tạo dự án mới',
+            style: GoogleFonts.inter(color: Colors.white)),
+        backgroundColor: AppColors.surface,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Text(
-            'CREATE NEW SLATE',
-            style: GoogleFonts.inter(
-              color: AppColors.goldLight,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isEditing ? 'EDIT SLATE' : 'NEW SLATE',
+              style: GoogleFonts.inter(
+                color: AppColors.goldLight,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'New Production',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 4),
+            Text(
+              _isEditing ? 'Edit Project' : 'Create New Project',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
             ),
-          ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-          _FormField(label: 'TITLE', controller: _titleController, hint: 'e.g. The Long Goodbye'),
-          const SizedBox(height: 14),
-          _FormField(
-            label: 'DESCRIPTION',
-            controller: _descriptionController,
-            hint: 'Brief logline...',
-            maxLines: 3,
-          ),
-          const SizedBox(height: 14),
-          _FormField(label: 'DIRECTOR', controller: _directorController, hint: 'e.g. R. Chandler'),
-          const SizedBox(height: 14),
-          _FormField(
-            label: 'START DATE',
-            controller: _startDateController,
-            hint: 'YYYY-MM-DD',
-          ),
-          const SizedBox(height: 14),
-          _FormField(
-            label: 'THUMBNAIL URL',
-            controller: _thumbnailController,
-            hint: 'https://...',
-          ),
-          const SizedBox(height: 20),
-
-          // Type selector
-          Text(
-            'TYPE',
-            style: GoogleFonts.inter(
-              color: AppColors.textMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: ProjectType.values.map((t) {
-              final isActive = _type == t;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: GestureDetector(
-                  onTap: () => setState(() => _type = t),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isActive ? AppColors.goldLight : Colors.white.withValues(alpha: 0.04),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isActive ? AppColors.goldLight : AppColors.borderSubtle,
+            _SectionLabel('BASIC INFO'),
+            const SizedBox(height: 10),
+            GlassCard(
+              child: Column(
+                children: [
+                  _FormField(
+                    label: 'Project Title',
+                    controller: _titleCtrl,
+                    validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Tên dự án không được để trống' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  _FormField(label: 'Director', controller: _directorCtrl),
+                  const SizedBox(height: 12),
+                  _FormField(
+                    label: 'Description',
+                    controller: _descCtrl,
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 12),
+                  _FormField(
+                    label: 'Code Name',
+                    controller: _codeNameCtrl,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Mã dự án không được để trống';
+                      final duplicate = provider.projects.any((p) =>
+                      p.codeName.trim().toLowerCase() == v.trim().toLowerCase() &&
+                          p.id != _existing?.id);
+                      if (duplicate) return 'Mã dự án này đã tồn tại';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _FormField(label: 'Thumbnail URL (optional)', controller: _thumbnailCtrl),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: _pickDate,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Start Date: $_formattedDate',
+                              style: GoogleFonts.inter(color: Colors.white, fontSize: 13)),
+                          const Icon(Icons.calendar_today_outlined,
+                              color: AppColors.textMuted, size: 16),
+                        ],
                       ),
                     ),
-                    child: Text(
-                      t.label,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            _SectionLabel('CLASSIFICATION'),
+            const SizedBox(height: 10),
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Type',
                       style: GoogleFonts.inter(
-                        color: isActive ? const Color(0xFF402D00) : AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                          color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  SegmentedButton<ProjectType>(
+                    segments: ProjectType.values
+                        .map((t) => ButtonSegment(value: t, label: Text(t.label)))
+                        .toList(),
+                    selected: {_type},
+                    onSelectionChanged: (s) => setState(() => _type = s.first),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Genre',
+                      style: GoogleFonts.inter(
+                          color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<ProjectGenre>(
+                    initialValue: _genre,
+                    dropdownColor: AppColors.surface,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.05),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppColors.border),
                       ),
                     ),
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                    items: ProjectGenre.values
+                        .map((g) => DropdownMenuItem(value: g, child: Text(g.label)))
+                        .toList(),
+                    onChanged: (g) => setState(() => _genre = g ?? _genre),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-
-          // Genre selector
-          Text(
-            'GENRE',
-            style: GoogleFonts.inter(
-              color: AppColors.textMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
+                  const SizedBox(height: 16),
+                  Text('Status',
+                      style: GoogleFonts.inter(
+                          color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  SegmentedButton<ProjectStatus>(
+                    segments: ProjectStatus.values
+                        .map((s) => ButtonSegment(value: s, label: Text(s.label)))
+                        .toList(),
+                    selected: {_status},
+                    onSelectionChanged: (s) => setState(() => _status = s.first),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Progress',
+                          style: GoogleFonts.inter(
+                              color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700)),
+                      Text('$_progress%',
+                          style: GoogleFonts.jetBrainsMono(
+                              color: AppColors.goldLight, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  Slider(
+                    value: _progress.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    activeColor: AppColors.goldLight,
+                    inactiveColor: AppColors.border,
+                    onChanged: (v) => setState(() => _progress = v.round()),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: ProjectGenre.values.map((g) {
-              final isActive = _genre == g;
-              return GestureDetector(
-                onTap: () => setState(() => _genre = g),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isActive ? AppColors.teal.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isActive ? AppColors.teal.withValues(alpha: 0.5) : AppColors.borderSubtle,
-                    ),
-                  ),
-                  child: Text(
-                    g.label,
-                    style: GoogleFonts.inter(
-                      color: isActive ? AppColors.teal : AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 28),
+            const SizedBox(height: 20),
 
-          // Submit button
-          SizedBox(
-            width: double.infinity,
-            child: GestureDetector(
-              onTap: _handleSave,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.goldLight,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.gold.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    'CREATE PROJECT',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF402D00),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _SectionLabel('ACTS (STRUCTURE)'),
+                GestureDetector(
+                  onTap: _addActField,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.add_circle_outline, color: AppColors.teal, size: 16),
+                      const SizedBox(width: 4),
+                      Text('Add Act',
+                          style: GoogleFonts.inter(
+                              color: AppColors.teal, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ],
                   ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            GlassCard(
+              child: Column(
+                children: List.generate(_acts.length, (i) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 26,
+                          height: 26,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppColors.goldLight.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text('${i + 1}',
+                              style: GoogleFonts.jetBrainsMono(
+                                  color: AppColors.goldLight,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            initialValue: _acts[i],
+                            onChanged: (v) => _acts[i] = v,
+                            style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              hintText: 'Act ${i + 1}: ...',
+                              hintStyle: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
+                              filled: true,
+                              fillColor: Colors.white.withValues(alpha: 0.05),
+                              contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: AppColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: AppColors.border),
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _acts.length > 1 ? () => _removeAct(i) : null,
+                          icon: const Icon(Icons.close, size: 16),
+                          color: AppColors.textMuted,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.goldLight,
+                  foregroundColor: const Color(0xFF402D00),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => _submit(provider),
+                child: Text(
+                  _isEditing ? 'SAVE CHANGES' : 'CREATE PROJECT',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, letterSpacing: 1.5),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.inter(
+        color: AppColors.textMuted,
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.5,
       ),
     );
   }
@@ -246,42 +458,47 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 class _FormField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
-  final String hint;
   final int maxLines;
+  final String? Function(String?)? validator;
 
   const _FormField({
     required this.label,
     required this.controller,
-    required this.hint,
     this.maxLines = 1,
+    this.validator,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            color: AppColors.textMuted,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.5,
-          ),
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      validator: validator,
+      style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
+        errorStyle: GoogleFonts.inter(color: Colors.redAccent, fontSize: 11),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: GoogleFonts.inter(color: AppColors.textMuted),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.border),
         ),
-      ],
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
+      ),
     );
   }
 }

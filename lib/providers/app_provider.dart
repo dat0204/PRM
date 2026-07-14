@@ -68,6 +68,11 @@ class AppProvider extends ChangeNotifier {
   bool _isFiltering = false;
   bool _isExporting = false;
 
+  // Project đang được sửa khi mở AddProjectScreen ở chế độ Edit (F1.1).
+  // Bằng null khi người dùng bấm "+" để tạo dự án mới.
+  Project? _editingProject;
+  Project? get editingProject => _editingProject;
+
   // Filter state
   SceneFilterState _activeFilters = const SceneFilterState();
 
@@ -75,26 +80,40 @@ class AppProvider extends ChangeNotifier {
     _bootstrap();
   }
 
+  // Nếu bootstrap lỗi, lưu lại để UI có thể hiển thị thay vì xoay mãi.
+  Object? _bootstrapError;
+  Object? get bootstrapError => _bootstrapError;
+
   // -- Bootstrap: load from SQLite, seeding with mock data on first run --
   Future<void> _bootstrap() async {
-    final alreadySeeded = await _db.isSeeded;
+    try {
+      final alreadySeeded = await _db.isSeeded;
 
-    if (!alreadySeeded) {
-      final sceneCharacterLinks = <String, List<String>>{
-        for (final s in initialScenes) s.id: s.characterIds,
-      };
-      await _db.seedIfEmpty(
-        projects: initialProjects.map((p) => p.toMap()).toList(),
-        characters: initialCharacters.map((c) => c.toMap()).toList(),
-        locations: initialLocations.map((l) => l.toMap()).toList(),
-        scenes: initialScenes.map((s) => s.toMap()).toList(),
-        sceneCharacterLinks: sceneCharacterLinks,
-      );
+      if (!alreadySeeded) {
+        final sceneCharacterLinks = <String, List<String>>{
+          for (final s in initialScenes) s.id: s.characterIds,
+        };
+        await _db.seedIfEmpty(
+          projects: initialProjects.map((p) => p.toMap()).toList(),
+          characters: initialCharacters.map((c) => c.toMap()).toList(),
+          locations: initialLocations.map((l) => l.toMap()).toList(),
+          scenes: initialScenes.map((s) => s.toMap()).toList(),
+          sceneCharacterLinks: sceneCharacterLinks,
+        );
+      }
+
+      await _reloadAllFromDb();
+    } catch (e, st) {
+      // In lỗi thật ra console thay vì để loading xoay vô thời hạn.
+      // ignore: avoid_print
+      print('AppProvider._bootstrap() ERROR: $e');
+      // ignore: avoid_print
+      print(st);
+      _bootstrapError = e;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    await _reloadAllFromDb();
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> _reloadAllFromDb() async {
@@ -211,6 +230,7 @@ class AppProvider extends ChangeNotifier {
       _selectedSceneId = null;
     } else if (_isAddingProject) {
       _isAddingProject = false;
+      _editingProject = null;
     } else if (_isAddingCharacter) {
       _isAddingCharacter = false;
     } else if (_isFiltering) {
@@ -221,7 +241,10 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void startAddProject() {
+  /// F1.1: mở màn hình Add/Edit Project. Truyền [existing] để mở ở chế độ
+  /// sửa (AddProjectScreen sẽ đọc `provider.editingProject` để biết).
+  void startAddProject({Project? existing}) {
+    _editingProject = existing;
     _isAddingProject = true;
     notifyListeners();
   }
@@ -249,9 +272,33 @@ class AppProvider extends ChangeNotifier {
     _projects = [..._projects, newProject];
     _selectedProjectId = newProject.id;
     _isAddingProject = false;
+    _editingProject = null;
     _currentTab = TabKey.projects;
     notifyListeners();
     _db.upsertProject(newProject.toMap());
+  }
+
+  /// F1.1: cập nhật một dự án đã tồn tại.
+  void updateProject(String id, Project updated) {
+    _projects = _projects.map((p) => p.id == id ? updated : p).toList();
+    _selectedProjectId = updated.id;
+    _isAddingProject = false;
+    _editingProject = null;
+    _currentTab = TabKey.projects;
+    notifyListeners();
+    _db.upsertProject(updated.toMap());
+  }
+
+  /// F1.1: xóa một dự án. Các Scene thuộc dự án này cũng bị xóa theo
+  /// (cascade ở tầng SQLite lẫn ở bộ nhớ trong).
+  void deleteProject(String id) {
+    _projects = _projects.where((p) => p.id != id).toList();
+    _scenes = _scenes.where((s) => s.projectId != id).toList();
+    if (_selectedProjectId == id && _projects.isNotEmpty) {
+      _selectedProjectId = _projects.first.id;
+    }
+    notifyListeners();
+    _db.deleteProject(id);
   }
 
   void saveCharacter(Character newCharacter) {
@@ -308,7 +355,7 @@ class AppProvider extends ChangeNotifier {
 
   // Computed getters
   String get headerTitle {
-    if (_isAddingProject) return 'NEW SLATE';
+    if (_isAddingProject) return _editingProject != null ? 'EDIT SLATE' : 'NEW SLATE';
     if (_isAddingCharacter) return 'NEW CAST';
     if (_isFiltering) return 'FILTERS';
     if (_isExporting) return 'EXPORT REPORT';

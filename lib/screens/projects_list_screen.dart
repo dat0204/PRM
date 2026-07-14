@@ -1,11 +1,14 @@
 // lib/screens/projects_list_screen.dart
-// SceneFlow - Production Boards / Projects List Screen
+// SceneFlow - Project Launcher Screen (Module 1: Project & Act Management)
+//
+// F1.1: Hiển thị danh sách dự án dạng GridView (poster/card lớn).
+// Hỗ trợ thêm (FAB +), sửa và xóa dự án (AlertDialog xác nhận, SnackBar
+// phản hồi), đúng theo nguyên tắc UX bắt buộc ở mục 5.2.
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass_card.dart';
 import '../widgets/tag_chip.dart';
 import '../models/project.dart';
 import '../providers/app_provider.dart';
@@ -18,16 +21,16 @@ class ProjectsListScreen extends StatefulWidget {
 }
 
 class _ProjectsListScreenState extends State<ProjectsListScreen> {
-  String _filter = 'all';
+  String _searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final projects = provider.projects;
-
-    final filteredProjects = projects.where((p) {
-      if (_filter == 'all') return true;
-      return p.status.label == _filter;
+    final filtered = provider.projects.where((p) {
+      final q = _searchQuery.toLowerCase();
+      return p.title.toLowerCase().contains(q) ||
+          p.director.toLowerCase().contains(q) ||
+          p.codeName.toLowerCase().contains(q);
     }).toList();
 
     return Stack(
@@ -37,107 +40,88 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Banner header
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ACTIVE SLATE',
-                        style: GoogleFonts.inter(
-                          color: AppColors.goldLight,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Production Boards',
-                        style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              Text(
+                'PROJECTS',
+                style: GoogleFonts.inter(
+                  color: AppColors.goldLight,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'All Productions',
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Chọn một dự án để mở Story Board, hoặc bấm + để tạo dự án mới.',
+                style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12),
               ),
               const SizedBox(height: 16),
 
-              // Filter tabs
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterButton(
-                      label: 'All',
-                      value: 'all',
-                      active: _filter == 'all',
-                      onTap: () => setState(() => _filter = 'all'),
-                    ),
-                    const SizedBox(width: 6),
-                    _FilterButton(
-                      label: 'In Production',
-                      value: 'In Production',
-                      active: _filter == 'In Production',
-                      onTap: () => setState(() => _filter = 'In Production'),
-                    ),
-                    const SizedBox(width: 6),
-                    _FilterButton(
-                      label: 'Pre-Production',
-                      value: 'Pre-Production',
-                      active: _filter == 'Pre-Production',
-                      onTap: () => setState(() => _filter = 'Pre-Production'),
-                    ),
-                    const SizedBox(width: 6),
-                    _FilterButton(
-                      label: 'Completed',
-                      value: 'Completed',
-                      active: _filter == 'Completed',
-                      onTap: () => setState(() => _filter = 'Completed'),
-                    ),
-                  ],
+              // Search bar
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderSubtle),
+                ),
+                child: TextField(
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Search projects...',
+                    hintStyle: GoogleFonts.inter(color: AppColors.textMuted),
+                    prefixIcon: const Icon(Icons.search, color: AppColors.textMuted, size: 18),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Project cards
-              ...filteredProjects.map((project) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _ProjectCard(project: project),
-                  )),
-
-              if (filteredProjects.isEmpty)
-                GlassCard(
-                  padding: const EdgeInsets.all(40),
+              if (filtered.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 60),
                   child: Center(
                     child: Column(
                       children: [
-                        const Icon(Icons.movie_outlined, color: AppColors.textMuted, size: 32),
+                        const Icon(Icons.movie_creation_outlined,
+                            color: AppColors.textMuted, size: 36),
                         const SizedBox(height: 12),
                         Text(
-                          'No projects found in this category.',
+                          provider.projects.isEmpty
+                              ? 'Chưa có dự án nào. Bấm nút + để tạo dự án đầu tiên'
+                              : 'No projects found.',
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Click + below to start a new movie slate.',
-                          style: GoogleFonts.inter(
-                            color: AppColors.textMuted,
-                            fontSize: 11,
-                          ),
+                              color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
+                  ),
+                )
+              else
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filtered.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 0.66,
+                  ),
+                  itemBuilder: (ctx, i) => _ProjectPosterCard(
+                    project: filtered[i],
+                    onTap: () => provider.selectProject(filtered[i].id),
+                    onEdit: () => _showProjectMenu(context, provider, filtered[i]),
                   ),
                 ),
             ],
@@ -149,19 +133,15 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
           bottom: 100,
           right: 20,
           child: GestureDetector(
-            onTap: () => context.read<AppProvider>().startAddProject(),
+            onTap: () => provider.startAddProject(),
             child: Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: AppColors.goldLight,
+                color: AppColors.gold,
                 shape: BoxShape.circle,
                 boxShadow: [
-                  BoxShadow(
-                    color: AppColors.gold.withValues(alpha: 0.4),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
+                  BoxShadow(color: AppColors.gold.withValues(alpha: 0.4), blurRadius: 20),
                 ],
               ),
               child: const Icon(Icons.add, color: Color(0xFF402D00), size: 24),
@@ -171,266 +151,208 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
       ],
     );
   }
-}
 
-class _FilterButton extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _FilterButton({
-    required this.label,
-    required this.value,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? AppColors.goldLight : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: active ? AppColors.goldLight : AppColors.border,
-          ),
+  void _showProjectMenu(BuildContext context, AppProvider provider, Project project) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, color: AppColors.teal),
+              title: Text('Edit Project',
+                  style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.startAddProject(existing: project);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              title: Text('Delete Project',
+                  style: GoogleFonts.inter(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDelete(context, provider, project);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: active ? const Color(0xFF402D00) : AppColors.textSecondary,
-          ),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, AppProvider provider, Project project) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Xóa dự án?',
+            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          'Bạn có chắc muốn xóa "${project.title}"? Toàn bộ phân cảnh thuộc '
+              'dự án này cũng sẽ bị xóa theo. Hành động này không thể hoàn tác.',
+          style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Hủy',
+                style: GoogleFonts.inter(color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () {
+              provider.deleteProject(project.id);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Đã xóa "${project.title}"',
+                      style: GoogleFonts.inter(color: Colors.white)),
+                  backgroundColor: AppColors.surface,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            child: Text('Xóa',
+                style: GoogleFonts.inter(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ProjectCard extends StatelessWidget {
+class _ProjectPosterCard extends StatelessWidget {
   final Project project;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
 
-  const _ProjectCard({required this.project});
+  const _ProjectPosterCard({
+    required this.project,
+    required this.onTap,
+    required this.onEdit,
+  });
 
-  TagStyle _statusTagStyle() {
+  TagStyle get _statusStyle {
     switch (project.status) {
-      case ProjectStatus.completed:
+      case ProjectStatus.inProduction:
         return TagStyle.success;
       case ProjectStatus.preProduction:
-        return TagStyle.info;
-      case ProjectStatus.inProduction:
         return TagStyle.warning;
+      case ProjectStatus.completed:
+        return TagStyle.muted;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.all(16),
-      onTap: () => context.read<AppProvider>().selectProject(project.id),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Thumbnail
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 180,
-                  child: Image.network(
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onEdit,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Poster
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
                     project.thumbnailUrl,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: AppColors.surfaceAlt,
-                      child: const Icon(Icons.movie, color: AppColors.textMuted, size: 48),
+                      child: const Icon(Icons.movie_outlined, color: AppColors.textMuted, size: 32),
                     ),
                   ),
-                ),
-                // Gradient overlay
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: onEdit,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.more_horiz, color: Colors.white, size: 16),
                       ),
                     ),
                   ),
-                ),
-                // Code badge
-                Positioned(
-                  bottom: 10,
-                  left: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Text(
-                      project.codeName,
-                      style: GoogleFonts.jetBrainsMono(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1,
-                      ),
-                    ),
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: TagChip(label: project.status.label, style: _statusStyle, showDot: true),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
 
-          // Title row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  project.title,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+            // Info
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    project.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                        color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${project.genre.label} • ${project.codeName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 10),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: project.progress / 100,
+                      backgroundColor: Colors.white.withValues(alpha: 0.08),
+                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.goldLight),
+                      minHeight: 5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${project.progress}% complete',
+                    style: GoogleFonts.jetBrainsMono(color: AppColors.textSecondary, fontSize: 9),
+                  ),
+                ],
               ),
-              const Icon(Icons.more_vert, color: AppColors.textMuted, size: 18),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Tags
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              TagChip(label: project.genre.label, style: TagStyle.teal),
-              TagChip(label: project.type.label, style: TagStyle.muted),
-              TagChip(
-                label: project.status.label,
-                style: _statusTagStyle(),
-                showDot: project.status == ProjectStatus.inProduction,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Description
-          Text(
-            project.description,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              height: 1.5,
             ),
-          ),
-          const SizedBox(height: 12),
-
-          // Meta grid
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'DIRECTOR',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      project.director,
-                      style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'START DATE',
-                      style: GoogleFonts.inter(
-                        color: AppColors.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      project.startDate,
-                      style: GoogleFonts.inter(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Progress bar
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Overall Progress',
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                '${project.progress}%',
-                style: GoogleFonts.jetBrainsMono(
-                  color: AppColors.teal,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: project.progress / 100,
-              backgroundColor: Colors.white.withValues(alpha: 0.1),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.teal),
-              minHeight: 6,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
